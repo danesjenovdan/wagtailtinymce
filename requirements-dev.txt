@@ -1,5 +1,6 @@
 wagtail
 Django
+wagtailvideos
 
 # For translations
 polib

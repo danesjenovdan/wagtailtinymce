@@ -1,97 +1,250 @@
 /**
- * plugin.js
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
  *
- * Released under LGPL License.
- * Copyright (c) 1999-2015 Ephox Corp. All rights reserved
- *
- * License: http://www.tinymce.com/license
- * Contributing: http://www.tinymce.com/contributing
+ * Version: 6.0.0 (TBD)
  */
+(function () {
+    'use strict';
 
-/*global tinymce:true */
+    var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
-tinymce.PluginManager.add('advlist', function(editor) {
-	var olMenuItems, ulMenuItems, lastStyles = {};
+    const applyListFormat = (editor, listName, styleValue) => {
+      const cmd = listName === 'UL' ? 'InsertUnorderedList' : 'InsertOrderedList';
+      editor.execCommand(cmd, false, styleValue === false ? null : { 'list-style-type': styleValue });
+    };
 
-	function buildMenuItems(listName, styleValues) {
-		var items = [];
+    const register$2 = editor => {
+      editor.addCommand('ApplyUnorderedListStyle', (ui, value) => {
+        applyListFormat(editor, 'UL', value['list-style-type']);
+      });
+      editor.addCommand('ApplyOrderedListStyle', (ui, value) => {
+        applyListFormat(editor, 'OL', value['list-style-type']);
+      });
+    };
 
-		tinymce.each(styleValues.split(/[ ,]/), function(styleValue) {
-			items.push({
-				text: styleValue.replace(/\-/g, ' ').replace(/\b\w/g, function(chr) {
-					return chr.toUpperCase();
-				}),
-				data: styleValue == 'default' ? '' : styleValue
-			});
-		});
+    const option = name => editor => editor.options.get(name);
+    const register$1 = editor => {
+      const registerOption = editor.options.register;
+      registerOption('advlist_number_styles', {
+        processor: 'string[]',
+        default: 'default,lower-alpha,lower-greek,lower-roman,upper-alpha,upper-roman'.split(',')
+      });
+      registerOption('advlist_bullet_styles', {
+        processor: 'string[]',
+        default: 'default,circle,square'.split(',')
+      });
+    };
+    const getNumberStyles = option('advlist_number_styles');
+    const getBulletStyles = option('advlist_bullet_styles');
 
-		return items;
-	}
+    var global = tinymce.util.Tools.resolve('tinymce.util.Tools');
 
-	olMenuItems = buildMenuItems('OL', editor.getParam(
-		"advlist_number_styles",
-		"default,lower-alpha,lower-greek,lower-roman,upper-alpha,upper-roman"
-	));
+    const isNullable = a => a === null || a === undefined;
+    const isNonNullable = a => !isNullable(a);
 
-	ulMenuItems = buildMenuItems('UL', editor.getParam("advlist_bullet_styles", "default,circle,disc,square"));
+    class Optional {
+      constructor(tag, value) {
+        this.tag = tag;
+        this.value = value;
+      }
+      static some(value) {
+        return new Optional(true, value);
+      }
+      static none() {
+        return Optional.singletonNone;
+      }
+      fold(onNone, onSome) {
+        if (this.tag) {
+          return onSome(this.value);
+        } else {
+          return onNone();
+        }
+      }
+      isSome() {
+        return this.tag;
+      }
+      isNone() {
+        return !this.tag;
+      }
+      map(mapper) {
+        if (this.tag) {
+          return Optional.some(mapper(this.value));
+        } else {
+          return Optional.none();
+        }
+      }
+      bind(binder) {
+        if (this.tag) {
+          return binder(this.value);
+        } else {
+          return Optional.none();
+        }
+      }
+      exists(predicate) {
+        return this.tag && predicate(this.value);
+      }
+      forall(predicate) {
+        return !this.tag || predicate(this.value);
+      }
+      filter(predicate) {
+        if (!this.tag || predicate(this.value)) {
+          return this;
+        } else {
+          return Optional.none();
+        }
+      }
+      getOr(replacement) {
+        return this.tag ? this.value : replacement;
+      }
+      or(replacement) {
+        return this.tag ? this : replacement;
+      }
+      getOrThunk(thunk) {
+        return this.tag ? this.value : thunk();
+      }
+      orThunk(thunk) {
+        return this.tag ? this : thunk();
+      }
+      getOrDie(message) {
+        if (!this.tag) {
+          throw new Error(message !== null && message !== void 0 ? message : 'Called getOrDie on None');
+        } else {
+          return this.value;
+        }
+      }
+      static from(value) {
+        return isNonNullable(value) ? Optional.some(value) : Optional.none();
+      }
+      getOrNull() {
+        return this.tag ? this.value : null;
+      }
+      getOrUndefined() {
+        return this.value;
+      }
+      each(worker) {
+        if (this.tag) {
+          worker(this.value);
+        }
+      }
+      toArray() {
+        return this.tag ? [this.value] : [];
+      }
+      toString() {
+        return this.tag ? `some(${ this.value })` : 'none()';
+      }
+    }
+    Optional.singletonNone = new Optional(false);
 
-	function applyListFormat(listName, styleValue) {
-		editor.undoManager.transact(function() {
-			var list, dom = editor.dom, sel = editor.selection;
+    const isChildOfBody = (editor, elm) => {
+      return editor.dom.isChildOf(elm, editor.getBody());
+    };
+    const isTableCellNode = node => {
+      return node && /^(TH|TD)$/.test(node.nodeName);
+    };
+    const isListNode = editor => node => {
+      return node && /^(OL|UL|DL)$/.test(node.nodeName) && isChildOfBody(editor, node);
+    };
+    const getSelectedStyleType = editor => {
+      const listElm = editor.dom.getParent(editor.selection.getNode(), 'ol,ul');
+      const style = editor.dom.getStyle(listElm, 'listStyleType');
+      return Optional.from(style);
+    };
 
-			// Check for existing list element
-			list = dom.getParent(sel.getNode(), 'ol,ul');
+    const findIndex = (list, predicate) => {
+      for (let index = 0; index < list.length; index++) {
+        const element = list[index];
+        if (predicate(element)) {
+          return index;
+        }
+      }
+      return -1;
+    };
+    const styleValueToText = styleValue => {
+      return styleValue.replace(/\-/g, ' ').replace(/\b\w/g, chr => {
+        return chr.toUpperCase();
+      });
+    };
+    const isWithinList = (editor, e, nodeName) => {
+      const tableCellIndex = findIndex(e.parents, isTableCellNode);
+      const parents = tableCellIndex !== -1 ? e.parents.slice(0, tableCellIndex) : e.parents;
+      const lists = global.grep(parents, isListNode(editor));
+      return lists.length > 0 && lists[0].nodeName === nodeName;
+    };
+    const makeSetupHandler = (editor, nodeName) => api => {
+      const nodeChangeHandler = e => {
+        api.setActive(isWithinList(editor, e, nodeName));
+      };
+      editor.on('NodeChange', nodeChangeHandler);
+      return () => editor.off('NodeChange', nodeChangeHandler);
+    };
+    const addSplitButton = (editor, id, tooltip, cmd, nodeName, styles) => {
+      editor.ui.registry.addSplitButton(id, {
+        tooltip,
+        icon: nodeName === 'OL' ? 'ordered-list' : 'unordered-list',
+        presets: 'listpreview',
+        columns: 3,
+        fetch: callback => {
+          const items = global.map(styles, styleValue => {
+            const iconStyle = nodeName === 'OL' ? 'num' : 'bull';
+            const iconName = styleValue === 'disc' || styleValue === 'decimal' ? 'default' : styleValue;
+            const itemValue = styleValue === 'default' ? '' : styleValue;
+            const displayText = styleValueToText(styleValue);
+            return {
+              type: 'choiceitem',
+              value: itemValue,
+              icon: 'list-' + iconStyle + '-' + iconName,
+              text: displayText
+            };
+          });
+          callback(items);
+        },
+        onAction: () => editor.execCommand(cmd),
+        onItemAction: (_splitButtonApi, value) => {
+          applyListFormat(editor, nodeName, value);
+        },
+        select: value => {
+          const listStyleType = getSelectedStyleType(editor);
+          return listStyleType.map(listStyle => value === listStyle).getOr(false);
+        },
+        onSetup: makeSetupHandler(editor, nodeName)
+      });
+    };
+    const addButton = (editor, id, tooltip, cmd, nodeName, _styles) => {
+      editor.ui.registry.addToggleButton(id, {
+        active: false,
+        tooltip,
+        icon: nodeName === 'OL' ? 'ordered-list' : 'unordered-list',
+        onSetup: makeSetupHandler(editor, nodeName),
+        onAction: () => editor.execCommand(cmd)
+      });
+    };
+    const addControl = (editor, id, tooltip, cmd, nodeName, styles) => {
+      if (styles.length > 1) {
+        addSplitButton(editor, id, tooltip, cmd, nodeName, styles);
+      } else {
+        addButton(editor, id, tooltip, cmd, nodeName);
+      }
+    };
+    const register = editor => {
+      addControl(editor, 'numlist', 'Numbered list', 'InsertOrderedList', 'OL', getNumberStyles(editor));
+      addControl(editor, 'bullist', 'Bullet list', 'InsertUnorderedList', 'UL', getBulletStyles(editor));
+    };
 
-			// Switch/add list type if needed
-			if (!list || list.nodeName != listName || styleValue === false) {
-				editor.execCommand(listName == 'UL' ? 'InsertUnorderedList' : 'InsertOrderedList');
-			}
+    var Plugin = () => {
+      global$1.add('advlist', editor => {
+        if (editor.hasPlugin('lists')) {
+          register$1(editor);
+          register(editor);
+          register$2(editor);
+        } else {
+          console.error('Please use the Lists plugin together with the Advanced List plugin.');
+        }
+      });
+    };
 
-			// Set style
-			styleValue = styleValue === false ? lastStyles[listName] : styleValue;
-			lastStyles[listName] = styleValue;
+    Plugin();
 
-			list = dom.getParent(sel.getNode(), 'ol,ul');
-			if (list) {
-				dom.setStyle(list, 'listStyleType', styleValue ? styleValue : null);
-				list.removeAttribute('data-mce-style');
-			}
-
-			editor.focus();
-		});
-	}
-
-	function updateSelection(e) {
-		var listStyleType = editor.dom.getStyle(editor.dom.getParent(editor.selection.getNode(), 'ol,ul'), 'listStyleType') || '';
-
-		e.control.items().each(function(ctrl) {
-			ctrl.active(ctrl.settings.data === listStyleType);
-		});
-	}
-
-	editor.addButton('numlist', {
-		type: 'splitbutton',
-		tooltip: 'Numbered list',
-		menu: olMenuItems,
-		onshow: updateSelection,
-		onselect: function(e) {
-			applyListFormat('OL', e.control.settings.data);
-		},
-		onclick: function() {
-			applyListFormat('OL', false);
-		}
-	});
-
-	editor.addButton('bullist', {
-		type: 'splitbutton',
-		tooltip: 'Bullet list',
-		menu: ulMenuItems,
-		onshow: updateSelection,
-		onselect: function(e) {
-			applyListFormat('UL', e.control.settings.data);
-		},
-		onclick: function() {
-			applyListFormat('UL', false);
-		}
-	});
-});
+}());

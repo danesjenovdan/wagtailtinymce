@@ -102,6 +102,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 ModalWorkflow({
                     url: url,
                     urlParams: urlParams,
+                    onload: DOCUMENT_CHOOSER_MODAL_ONLOAD_HANDLERS,
                     responses: {
                         documentChosen: function(pageData) {
                             editor.undoManager.transact(function() {
@@ -113,20 +114,20 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 });
             }
 
-            editor.addButton('wagtaildoclink', {
+            editor.ui.registry.addButton('wagtaildoclink', {
                 icon: 'doc-full',
-                tooltip: 'Insert/edit document',
-                onclick: showDialog,
-                stateSelector: 'a[data-linktype=document]'
-            });
+                text: 'Document',
+                onAction: showDialog,
+                stateSelector:  'a[data-linktype=document]'
+            })
 
-            editor.addMenuItem('wagtaildoclink', {
+            editor.ui.registry.addMenuItem('wagtaildoclink', {
                 icon: 'doc-full',
-                text: 'Insert/edit document',
-                onclick: showDialog,
+                text: 'Document',
+                onAction: showDialog,
                 context: 'insert',
                 prependToContext: true
-            });
+            })
 
             editor.addCommand('mceWagtailDocument', showDialog);
         });

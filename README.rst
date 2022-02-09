@@ -1,12 +1,12 @@
 ===============
-Wagtail TinyMCE
+Wagtail TinyMCE. Full Rich Text Editor Experience.
 ===============
 
 Wagtail TinyMCE offers integration of the
 `TinyMCE rich text editor <http://www.tinymce.com>`_ into the
 `Wagtail CMS <http://wagtail.io>`_.
 
-As of Wagtail 1.5 this integrates using Wagtail's alternative rich text editor feature and requires no extra customisation or patching.
+As of Wagtail 2 this integrates using Wagtail's alternative rich text editor feature and requires no extra customisation or patching.
 
 Installation
 ============
@@ -31,7 +31,7 @@ For example, to use TinyMCE for all ``RichTextField`` and ``RichTextBlock`` inst
 Or, to use TinyMCE for certain instances...
 
 .. code-block:: python
-    
+
     WAGTAILADMIN_RICH_TEXT_EDITORS = {
         'default': {
             'WIDGET': 'wagtail.wagtailadmin.rich_text.HalloRichTextArea'
@@ -40,18 +40,18 @@ Or, to use TinyMCE for certain instances...
             'WIDGET': 'wagtailtinymce.rich_text.TinyMCERichTextArea'
         },
     }
-    
+
 ...and declare fields with the corresponding key in the ``editor`` parameter:
 
 .. code-block:: python
 
     html_field = RichTextField(editor='tinymce', ...)
     stream_field = StreamField([('html', RichTextBlock(editor='tinymce', ...)), ...])
-    
-TinyMCE configuration
-===================== 
 
-The ``TinyMCERichTextArea`` constructor accepts keyword arguments for buttons, menus and options which are merged with defaults and passed to TinyMCE. 
+TinyMCE configuration
+=====================
+
+The ``TinyMCERichTextArea`` constructor accepts keyword arguments for buttons, menus and options which are merged with defaults and passed to TinyMCE.
 
 However, Wagtail does not currently allow for passing parameters to this constructor. To change the configuration you must create and register a subclass of ``TinyMCERichTextArea`` and pass these parameters or amend defaults in the subclass constructor.
 
@@ -80,7 +80,7 @@ This is a dict. By default, TinyMCE is loaded with the following options set:
 - ``language_load``
 
 TinyMCE plugins and tools
-========================= 
+=========================
 
 TinyMCE is loaded with the following plugins:
 
@@ -135,3 +135,23 @@ Versioning
 ==========
 The version number of this package is the TinyMCE version, followed by
 the release number of this package for that TinyMCE version.
+
+Current TinyMce Version
+============
+This repository uses TinyMce - 5.10
+
+Additional Features
+============
+Also, this repo provides custom EditorHTMLConverter to support full rich text experience
+By default, wagtail blocks any additional attributes for html tags.
+Of course, you can allow some with hooks, but sometimes it can be inconveniently. Especial if you
+need to allow any tag with any number of attributes.
+
+WagtailVideos
+===========
+Provides additional plugin to support `wagtailvideos <https://github.com/neon-jungle/wagtailvideos>`_ library.
+
+IMPORTANT
+===========
+Wagtail main "rule" is to prevent content editors of changing raw html.
+But, sometimes we have to do something with it for our own purposes.

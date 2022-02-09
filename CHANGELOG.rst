@@ -1,6 +1,13 @@
 Changes
 =======
 
+5 (2021-02-09)
+--------------------
+
+- Update tinymce to version 5.10
+- Provide custom HtmlConverter for full rich text experience
+- Add support for wagtailvideos library
+
 4.2.1.6 (unreleased)
 --------------------
 

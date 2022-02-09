@@ -26,20 +26,54 @@
 
 import json
 
-from django.core.urlresolvers import reverse
 from django.templatetags.static import static
 from django.utils import translation
 from django.utils.html import escape
 from django.utils.html import format_html
 from django.utils.html import format_html_join
 from django.utils.safestring import mark_safe
+from django.urls import path
 
-from wagtail.wagtailadmin.templatetags.wagtailadmin_tags import hook_output
-from wagtail.wagtailcore import hooks
+from django.urls import reverse
+
+from wagtail.admin.templatetags.wagtailadmin_tags import hook_output
+from wagtail.admin.rich_text.converters.editor_html import WhitelistRule
+from wagtail.core import hooks
+from wagtail.core.whitelist import attribute_rule
+
+from .views import get_video_url
 
 
 def to_js_primitive(string):
     return mark_safe(json.dumps(escape(string)))
+
+
+@hooks.register('register_admin_urls')
+def register_url():
+    return [
+        path('get_video_url/', get_video_url, name='get_video_url'),
+        path('get_video_url/<str:video_id>/', get_video_url, name='get_video_url_id'),
+    ]
+
+
+@hooks.register('insert_editor_js')
+def add_video_url():
+    return format_html(
+        """
+            <script>
+                var GET_VIDEO_MEDIA_URL = '{0}';
+            </script>
+        """, reverse('get_video_url')
+    )
+
+
+@hooks.register('register_rich_text_features')
+def video_feature(features):
+    features.register_converter_rule('editorhtml', 'video', [
+        WhitelistRule('video', attribute_rule({'class': True, 'loop': True, 'muted': True, 'autoplay': True,
+                                               'playsinline': True, 'controls': True}))
+    ])
+    features.default_features.append('video')
 
 
 @hooks.register('insert_editor_css')
@@ -55,6 +89,19 @@ def insert_editor_css():
     return css_includes + hook_output('insert_tinymce_css')
 
 
+@hooks.register('insert_editor_css')
+def insert_editor_css_two():
+    return format_html('<link rel="stylesheet" href="{}">', static('wagtailtinymce/css/tiny_custom.css'))
+
+
+def _format_js_includes(js_files):
+    return format_html_join(
+        '\n',
+        '<script src="{0}"></script>',
+        ((static(filename),) for filename in js_files)
+    )
+
+
 @hooks.register('insert_editor_js')
 def insert_editor_js():
     preload = format_html(
@@ -68,21 +115,17 @@ def insert_editor_js():
         '</script>',
         to_js_primitive(static('wagtailtinymce/js/vendor/tinymce')),
     )
-    js_files = [
-        'wagtailtinymce/js/vendor/tinymce/tinymce.jquery.js',
+    js_includes = _format_js_includes([
+        'wagtailtinymce/js/vendor/tinymce/jquery.tinymce.min.js',
+        'wagtailtinymce/js/vendor/tinymce/tinymce.min.js',
         'wagtailtinymce/js/tinymce-editor.js',
-    ]
-    js_includes = format_html_join(
-        '\n',
-        '<script src="{0}"></script>',
-        ((static(filename),) for filename in js_files)
-    )
+    ])
     return preload + js_includes + hook_output('insert_tinymce_js')
 
 
 @hooks.register('insert_tinymce_js')
 def images_richtexteditor_js():
-    return format_html(
+    preload = format_html(
         """
         <script>
             registerMCEPlugin("wagtailimage", {}, {});
@@ -93,11 +136,15 @@ def images_richtexteditor_js():
         to_js_primitive(translation.to_locale(translation.get_language())),
         to_js_primitive(reverse('wagtailimages:chooser_select_format', args=['00000000']))
     )
-
+    js_includes = _format_js_includes([
+        'wagtailimages/js/image-chooser-modal.js',
+        'wagtailimages/js/image-chooser.js'
+    ])
+    return preload + js_includes
 
 @hooks.register('insert_tinymce_js')
 def embeds_richtexteditor_js():
-    return format_html(
+    preload = format_html(
         """
         <script>
             registerMCEPlugin("wagtailembeds", {}, {});
@@ -106,11 +153,15 @@ def embeds_richtexteditor_js():
         to_js_primitive(static('wagtailtinymce/js/tinymce-plugins/wagtailembeds.js')),
         to_js_primitive(translation.to_locale(translation.get_language())),
     )
+    js_includes = _format_js_includes([
+        'wagtailembeds/js/embed-chooser-modal.js',
+    ])
+    return preload + js_includes
 
 
 @hooks.register('insert_tinymce_js')
 def links_richtexteditor_js():
-    return format_html(
+    preload = format_html(
         """
         <script>
             registerMCEPlugin("wagtaillink", {}, {});
@@ -119,11 +170,16 @@ def links_richtexteditor_js():
         to_js_primitive(static('wagtailtinymce/js/tinymce-plugins/wagtaillink.js')),
         to_js_primitive(translation.to_locale(translation.get_language())),
     )
+    js_includes = _format_js_includes([
+        'wagtailadmin/js/page-chooser.js',
+        'wagtailadmin/js/page-chooser-modal.js',
+    ])
+    return preload + js_includes
 
 
 @hooks.register('insert_tinymce_js')
 def docs_richtexteditor_js():
-    return format_html(
+    preload = format_html(
         """
         <script>
             registerMCEPlugin("wagtaildoclink", {}, {});
@@ -132,3 +188,26 @@ def docs_richtexteditor_js():
         to_js_primitive(static('wagtailtinymce/js/tinymce-plugins/wagtaildoclink.js')),
         to_js_primitive(translation.to_locale(translation.get_language())),
     )
+    js_includes = _format_js_includes([
+        'wagtaildocs/js/document-chooser.js',
+        'wagtaildocs/js/document-chooser-modal.js',
+    ])
+    return preload + js_includes
+
+
+@hooks.register('insert_tinymce_js')
+def video_richtexteditor_js():
+    preload = format_html(
+        """
+            <script>
+                registerMCEPlugin("wagtailvideo", {}, {});
+            </script>
+        """,
+        to_js_primitive(static('wagtailtinymce/js/tinymce-plugins/wagtailvideo.js')),
+        to_js_primitive(translation.to_locale(translation.get_language()))
+    )
+    js_includes = _format_js_includes([
+        'wagtailvideos/js/video-chooser.js',
+        'wagtailvideos/js/video-chooser-modal.js'
+    ])
+    return preload + js_includes

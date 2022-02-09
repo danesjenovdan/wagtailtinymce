@@ -27,12 +27,16 @@ from __future__ import absolute_import, unicode_literals
 
 import json
 
+from django.conf import settings
 from django.forms import widgets
 from django.utils import translation
 from wagtail.utils.widgets import WidgetWithScript
-from wagtail.wagtailadmin.edit_handlers import RichTextFieldPanel
-from wagtail.wagtailcore.rich_text import DbWhitelister
-from wagtail.wagtailcore.rich_text import expand_db_html
+
+
+from wagtail.admin.edit_handlers import RichTextFieldPanel
+from wagtail.core.rich_text import features
+
+from .rich_text_utils import CustomEditorHTMLConverter
 
 
 class TinyMCERichTextArea(WidgetWithScript, widgets.Textarea):
@@ -42,21 +46,22 @@ class TinyMCERichTextArea(WidgetWithScript, widgets.Textarea):
         return {
             'buttons': [
                 [
-                    ['undo', 'redo'],
-                    ['styleselect'],
-                    ['bold', 'italic'],
-                    ['bullist', 'numlist', 'outdent', 'indent'],
-                    ['table'],
-                    ['link', 'unlink'],
-                    ['wagtaildoclink', 'wagtailimage', 'wagtailembed'],
-                    ['pastetext', 'fullscreen'],
+                    ['undo', 'redo', 'nonbreaking'],
+                    ['bold', 'italic', 'underline', 'strikethrough', 'formatselect'],
+                    ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'p'],
+                    ['alignleft', 'aligncenter', 'alignright'],
+                    ['bullist', 'numlist', 'formats', 'blockformats'],
+                    ['wagtaillink', 'link'],
+                    ['wagtailimage', 'wagtailembed', 'wagtailvideo'],
+                    ['codeeditor', 'wordcount', 'code'],
                 ]
             ],
             'menus': False,
             'options': {
                 'browser_spellcheck': True,
                 'noneditable_leave_contenteditable': True,
-                'language': translation.to_locale(translation.get_language()),
+                'language': translation.to_locale(
+                    translation.get_language() or settings.LANGUAGE_CODE),
                 'language_load': True,
             },
         }
@@ -64,18 +69,23 @@ class TinyMCERichTextArea(WidgetWithScript, widgets.Textarea):
     def __init__(self, attrs=None, **kwargs):
         super(TinyMCERichTextArea, self).__init__(attrs)
         self.kwargs = self.getDefaultArgs()
+        self.features = kwargs.pop('features', None)
         if kwargs is not None:
             self.kwargs.update(kwargs)
+
+        if self.features is None:
+            self.features = features.get_default_features()
+            self.converter = CustomEditorHTMLConverter()
 
     def get_panel(self):
         return RichTextFieldPanel
 
-    def render(self, name, value, attrs=None):
+    def render(self, name, value, attrs=None, renderer=None):
         if value is None:
             translated_value = None
         else:
-            translated_value = expand_db_html(value, for_editor=True)
-        return super(TinyMCERichTextArea, self).render(name, translated_value, attrs)
+            translated_value = self.converter.from_database_format(value)
+        return super(TinyMCERichTextArea, self).render(name, translated_value, attrs, renderer)
 
     def render_js_init(self, id_, name, value):
         kwargs = {
@@ -97,10 +107,17 @@ class TinyMCERichTextArea(WidgetWithScript, widgets.Textarea):
             else:
                 kwargs['menubar'] = ' '.join(self.kwargs['menus'])
 
+        if 'passthru_init_keys' in self.kwargs:
+            kwargs.update(self.kwargs['passthru_init_keys'])
+
+        if 'table' in self.kwargs:
+            for key, values in self.kwargs['table'].items():
+                kwargs[f'table_{key}'] = values
+
         return "makeTinyMCEEditable({0}, {1});".format(json.dumps(id_), json.dumps(kwargs))
 
     def value_from_datadict(self, data, files, name):
         original_value = super(TinyMCERichTextArea, self).value_from_datadict(data, files, name)
         if original_value is None:
             return None
-        return DbWhitelister.clean(original_value)
+        return self.converter.to_database_format(original_value)

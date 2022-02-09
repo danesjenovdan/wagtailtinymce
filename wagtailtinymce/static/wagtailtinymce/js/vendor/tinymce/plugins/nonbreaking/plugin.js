@@ -1,53 +1,115 @@
 /**
- * plugin.js
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
  *
- * Released under LGPL License.
- * Copyright (c) 1999-2015 Ephox Corp. All rights reserved
- *
- * License: http://www.tinymce.com/license
- * Contributing: http://www.tinymce.com/contributing
+ * Version: 6.0.0 (TBD)
  */
+(function () {
+    'use strict';
 
-/*global tinymce:true */
+    var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
-tinymce.PluginManager.add('nonbreaking', function(editor) {
-	var setting = editor.getParam('nonbreaking_force_tab');
+    const isSimpleType = type => value => typeof value === type;
+    const isBoolean = isSimpleType('boolean');
+    const isNumber = isSimpleType('number');
 
-	editor.addCommand('mceNonBreaking', function() {
-		editor.insertContent(
-			(editor.plugins.visualchars && editor.plugins.visualchars.state) ?
-			'<span class="mce-nbsp">&nbsp;</span>' : '&nbsp;'
-		);
+    const option = name => editor => editor.options.get(name);
+    const register$2 = editor => {
+      const registerOption = editor.options.register;
+      registerOption('nonbreaking_force_tab', {
+        processor: value => {
+          if (isBoolean(value)) {
+            return {
+              value: value ? 3 : 0,
+              valid: true
+            };
+          } else if (isNumber(value)) {
+            return {
+              value,
+              valid: true
+            };
+          } else {
+            return {
+              valid: false,
+              message: 'Must be a boolean or number.'
+            };
+          }
+        },
+        default: false
+      });
+      registerOption('nonbreaking_wrap', {
+        processor: 'boolean',
+        default: true
+      });
+    };
+    const getKeyboardSpaces = option('nonbreaking_force_tab');
+    const wrapNbsps = option('nonbreaking_wrap');
 
-		editor.dom.setAttrib(editor.dom.select('span.mce-nbsp'), 'data-mce-bogus', '1');
-	});
+    const stringRepeat = (string, repeats) => {
+      let str = '';
+      for (let index = 0; index < repeats; index++) {
+        str += string;
+      }
+      return str;
+    };
+    const isVisualCharsEnabled = editor => editor.plugins.visualchars ? editor.plugins.visualchars.isEnabled() : false;
+    const insertNbsp = (editor, times) => {
+      const classes = () => isVisualCharsEnabled(editor) ? 'mce-nbsp-wrap mce-nbsp' : 'mce-nbsp-wrap';
+      const nbspSpan = () => `<span class="${ classes() }" contenteditable="false">${ stringRepeat('&nbsp;', times) }</span>`;
+      const shouldWrap = wrapNbsps(editor);
+      const html = shouldWrap || editor.plugins.visualchars ? nbspSpan() : stringRepeat('&nbsp;', times);
+      editor.undoManager.transact(() => editor.insertContent(html));
+    };
 
-	editor.addButton('nonbreaking', {
-		title: 'Nonbreaking space',
-		cmd: 'mceNonBreaking'
-	});
+    const register$1 = editor => {
+      editor.addCommand('mceNonBreaking', () => {
+        insertNbsp(editor, 1);
+      });
+    };
 
-	editor.addMenuItem('nonbreaking', {
-		text: 'Nonbreaking space',
-		cmd: 'mceNonBreaking',
-		context: 'insert'
-	});
+    var global = tinymce.util.Tools.resolve('tinymce.util.VK');
 
-	if (setting) {
-		var spaces = +setting > 1 ? +setting : 3;  // defaults to 3 spaces if setting is true (or 1)
+    const setup = editor => {
+      const spaces = getKeyboardSpaces(editor);
+      if (spaces > 0) {
+        editor.on('keydown', e => {
+          if (e.keyCode === global.TAB && !e.isDefaultPrevented()) {
+            if (e.shiftKey) {
+              return;
+            }
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            insertNbsp(editor, spaces);
+          }
+        });
+      }
+    };
 
-		editor.on('keydown', function(e) {
-			if (e.keyCode == 9) {
+    const register = editor => {
+      const onAction = () => editor.execCommand('mceNonBreaking');
+      editor.ui.registry.addButton('nonbreaking', {
+        icon: 'non-breaking',
+        tooltip: 'Nonbreaking space',
+        onAction
+      });
+      editor.ui.registry.addMenuItem('nonbreaking', {
+        icon: 'non-breaking',
+        text: 'Nonbreaking space',
+        onAction
+      });
+    };
 
-				if (e.shiftKey) {
-					return;
-				}
+    var Plugin = () => {
+      global$1.add('nonbreaking', editor => {
+        register$2(editor);
+        register$1(editor);
+        register(editor);
+        setup(editor);
+      });
+    };
 
-				e.preventDefault();
-				for (var i = 0; i < spaces; i++) {
-					editor.execCommand('mceNonBreaking');
-				}
-			}
-		});
-	}
-});
+    Plugin();
+
+}());
