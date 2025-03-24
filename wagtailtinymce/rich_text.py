@@ -34,7 +34,7 @@ from wagtail.utils.widgets import WidgetWithScript
 
 
 from wagtail.admin.panels import FieldPanel
-from wagtail.core.rich_text import features
+from wagtail.rich_text import features
 
 from .rich_text_utils import CustomEditorHTMLConverter
 
