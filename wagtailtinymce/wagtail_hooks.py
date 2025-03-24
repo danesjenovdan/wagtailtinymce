@@ -38,8 +38,8 @@ from django.urls import reverse
 
 from wagtail.admin.templatetags.wagtailadmin_tags import hook_output
 from wagtail.admin.rich_text.converters.editor_html import WhitelistRule
-from wagtail.core import hooks
-from wagtail.core.whitelist import attribute_rule
+from wagtail import hooks
+from wagtail.whitelist import attribute_rule
 
 from .views import get_video_url
 

@@ -1,4 +1,4 @@
-from wagtail.core.whitelist import check_url
+from wagtail.whitelist import check_url
 from wagtail.admin.rich_text.converters.editor_html import EditorHTMLConverter, DbWhitelister
 from django.utils.functional import cached_property
 
